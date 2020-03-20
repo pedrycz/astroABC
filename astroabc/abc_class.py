@@ -47,7 +47,7 @@ def step(info_in,sim_pool=None):
                         trial_t - array of new parameters \theta
                         rho - distance rho(x,y)
                 '''
-                t, Pid,wgt,theta,variance,tol = info_in
+                t, Pid,wgt,theta,variance,tol,doublecheck_params = info_in
                 tm1=t-1
 
                 while True:
@@ -67,6 +67,19 @@ def step(info_in,sim_pool=None):
                                 else:
                                         covariance = variance
                                 trial_t = np.atleast_1d(scipy.stats.multivariate_normal.rvs(mean= t_old,cov=covariance,size=1))
+
+
+                                # double-checks if generated parameter fits previously declared range
+                                if doublecheck_params:
+                                    params_ok = True
+                                    for i in np.arange(abcsampler.nparam):
+                                        if float(abcsampler.priorprob[i](trial_t[i])) == float(0):
+                                            params_ok = False
+                                            break
+                                    if not params_ok:
+                                        continue
+
+
                                 if abcsampler.mpi_splitcomm:
                                         x = abcsampler.model(trial_t,sim_pool)
                                 else:
@@ -108,11 +121,12 @@ class ABC_class(object):
                         num_proc: int, if mp=True
                         restart: string, name of restart file
                         from_restart: Boolean, True/False
+                        doublecheck_params: Boolean, double-checks if generated parameter fits previously declared range
                 '''
                 prop_defaults={"tol_type":"exp","verbose":0,'adapt_t':False,
                 'threshold':75,'pert_kernel':1,'variance_method':0,'k_near':5,'dist_type': "user",
                 'dfunc':None,'datacov':None,'outfile':'abc_out.txt','mpi': None, 'mp':None,'num_proc':None,'mpi_splitcomm':False,
-                'num_abc':None,'restart':None,'from_restart':False}
+                'num_abc':None,'restart':None,'from_restart':False,'doublecheck_params':False}
                 for (prop, default) in six.iteritems(prop_defaults):
                         setattr(self, prop, kwargs.get(prop, default))
 
@@ -262,7 +276,7 @@ class ABC_class(object):
                         else:
                                 pool_outputs = self.parallel.pool.map(wrapper_func, zip([t]*(self.npart),\
                                 range(self.npart),[self.wgt]*(self.npart),\
-                                [self.theta]*(self.npart),[self.variance]*(self.npart), [self.tol]*(self.npart)))
+                                [self.theta]*(self.npart),[self.variance]*(self.npart), [self.tol]*(self.npart), [self.doublecheck_params]*(self.npart)))
 
                         for i in range(self.npart):
                                 if pool_outputs: # prevent error when mpi worker pool is closed
@@ -274,7 +288,7 @@ class ABC_class(object):
                                 self.wgt[t] = self.parallel.pool.map(self.particle_weight, zip([t]*(self.npart),range(self.npart)))
                 else:
                         for i in np.arange(self.npart):
-                                self.theta[t][i],self.Delta[t][i] = step((t,i, self.wgt, self.theta, self.variance, self.tol))
+                                self.theta[t][i],self.Delta[t][i] = step((t,i, self.wgt, self.theta, self.variance, self.tol, self.doublecheck_params))
                                 if t:
                                         self.wgt[t][i] = self.particle_weight((t,i))
                 #normalize
