@@ -1,6 +1,6 @@
 
 
-from astroabc.mpi_pool import MpiPool
+from mpi_pool import MpiPool
 import multiprocessing as mp
 import numpy as np
 import types
